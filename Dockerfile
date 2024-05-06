@@ -43,6 +43,16 @@ RUN xx-verify \
     /tmp/makemkv-install/usr/bin/mmccextr \
     /tmp/makemkv-install/usr/bin/mmgplsrv
 
+FROM --platform=$BUILDPLATFORM alpine:3.16 AS libfaketime
+RUN apk add --update build-base  # make, gcc, etc.
+ARG TARGETPLATFORM
+COPY --from=xx / /
+COPY src/libfaketime /build
+RUN make -C /build/src all
+RUN xx-verify \
+    /build/src/faketime \
+    /build/src/libfaketime.so.1
+
 # Pull base image.
 FROM jlesage/baseimage-gui:alpine-3.16-v4.5.3
 
@@ -83,6 +93,8 @@ RUN \
 COPY rootfs/ /
 COPY --from=makemkv-bin /opt/makemkv /opt/makemkv
 COPY --from=makemkv-oss /tmp/makemkv-install/usr /opt/makemkv
+COPY --from=libfaketime /build/src/faketime /opt/makemkv
+COPY --from=libfaketime /build/src/libfaketime.so.1 /opt/makemkv
 
 # Update the default configuration file with the latest beta key.
 RUN /opt/makemkv/bin/makemkv-update-beta-key /defaults/settings.conf
@@ -92,6 +104,9 @@ RUN \
     set-cont-env APP_NAME "MakeMKV" && \
     set-cont-env APP_VERSION "$MAKEMKV_VERSION" && \
     set-cont-env DOCKER_IMAGE_VERSION "$DOCKER_IMAGE_VERSION" && \
+    set-cont-env LDPRELOAD "/opt/makemkv/libfaketime.so.1" && \
+    set-cont-env FAKETIME_NO_CACHE "1" && \
+    set-cont-env FAKETIME "2024-04-15" && \
     true
 
 # Set public environment variables.
